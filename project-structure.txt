@@ -1,0 +1,100 @@
+CoreInventory Project Structure and Workflow
+
+1. Root
+- package.json: helper scripts for running backend and frontend and setup.
+- README.md: user instructions.
+
+2. backend/
+- backend/package.json: API server scripts, dependencies, Prisma scripts.
+- backend/.env: database URL, JWT secret, port, SMTP settings.
+- backend/prisma/schema.prisma: database models (User, Product, Warehouse, Location, Operation, OperationLine, LocationStock, StockMove, Category).
+- backend/prisma/migrations: generated migration SQL for schema.
+
+2.1 backend/db.js
+- Creates PostgreSQL Client via `pg`, connects and exports client for direct asynchronous queries.
+
+2.2 backend/src/config/prisma.js
+- Creates and exports PrismaClient singleton for ORM operations.
+
+2.3 backend/src/app.js
+- Express app setup: CORS, body parser, request logging, rate limit, health route, API routes, error middleware.
+- Attaches /api/auth, /api/products, /api/warehouses, /api/operations, /api/stock, /api/dashboard.
+
+2.4 backend/src/server.js
+- Loads dotenv and app module, starts Express server on PORT.
+- Also issues `db.query('SELECT NOW()')` at startup for health check.
+
+2.5 backend/src/routes/
+- auth.routes.js: signup/login/forgot-password/reset-password/me/profile.
+- product.routes.js: CRUD products + categories.
+- warehouse.routes.js: warehouses + locations.
+- operation.routes.js: receipt/delivery/transfer/adjustment operations, validate/cancel.
+- stock.routes.js: stock listing and move history.
+- dashboard.routes.js: KPI data.
+
+2.6 backend/src/controllers/
+- auth.controller.js: user sign-up/login, JWT token creation, OTP reset logic, send OTP via mailer.
+- product.controller.js: product CRUD, category upsert, stock totals.
+- warehouse.controller.js: create/list warehouses and locations.
+- operation.controller.js: operations pipeline, type/status filters, reference generation, create operations, validate updates stock and stock moves, cancel operations.
+- stock.controller.js: advanced stock and move history query endpoints.
+- dashboard.controller.js: aggregation of KPIs (total products, low stock, pending receipts/deliveries/transfers/adjustments, late ops, top products, total value).
+
+2.7 backend/src/middleware/
+- auth.middleware.js: JWT bearer token verification, user loading, requireManager role guard.
+- error.middleware.js: standardized Express error handler.
+
+2.8 backend/src/utils/
+- mailer.js: Nodemailer/SMTP for OTP emails.
+- seed.js: database seed script creates sample users, warehouses, locations, categories, products, stock, operations, stock moves.
+
+3. frontend/
+- frontend/package.json: Next.js App Router scripts and dependencies.
+- frontend/next.config.js, tsconfig, tailwind config.
+
+3.1 frontend/src/app/layout.tsx
+- Global HTML layout, includes Providers component.
+- metadata sets title and favicon.
+
+3.2 frontend/src/components/Providers.tsx
+- React Query provider, AuthProvider context, Toaster.
+
+3.3 frontend/src/components/layout/AppShell.tsx
+- Auth guard that redirects to login if not authenticated.
+- Renders Sidebar and main children.
+
+3.4 frontend/src/components/layout/Sidebar.tsx
+- Side navigation with icons using lucide-react.
+- Dynamic active state and dropdown for grouped links.
+- User profile + logout.
+
+3.5 frontend/src/hooks/useAuth.tsx
+- Auth context provider and hook.
+- login, logout, token store, fetch /api/auth/me, route protection.
+
+3.6 frontend/src/lib/api.ts
+- Axios instance with base URL and auth header.
+- API helper functions for auth, products, operations, stock, dashboard.
+
+3.7 frontend/src/app pages
+- login/page.tsx: auth form.
+- dashboard/page.tsx: KPI cards and charts.
+- products/page.tsx: list, create/edit product.
+- stock/page.tsx: location stock overview.
+- operations/*: receipts/deliveries/transfers/adjustments flow.
+- history/page.tsx: stock move ledger.
+- settings/warehouses/page.tsx: manage warehouses and locations.
+- profile/page.tsx: user profile.
+
+Other
+docs: project-structure.txt (this file) and README simplified.
+
+How it works (flow summary):
+- user logs in -> receives JWT -> app sets auth context
+- requests to /api endpoints include bearer token
+- server validates token and performs requested DB actions
+- operations update stock by transaction and log each movement,
+  wallet is maintained as location stock entries.
+- dashboard aggregates snapshot metrics and low stock alerts.
+
+Usage for reviewers: clone repo, install, migrate, seed, start backend and frontend, open UI.
