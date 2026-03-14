@@ -1,0 +1,149 @@
+// prisma/schema.prisma
+// We use PostgreSQL. Switch datasource url to MongoDB if preferred.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MANAGER
+  STAFF
+}
+
+enum OperationStatus {
+  DRAFT
+  WAITING
+  READY
+  DONE
+  CANCELLED
+}
+
+enum MoveType {
+  RECEIPT
+  DELIVERY
+  TRANSFER
+  ADJUSTMENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  loginId   String   @unique
+  email     String   @unique
+  password  String
+  role      Role     @default(STAFF)
+  otp       String?
+  otpExpiry DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  moves     StockMove[]
+  operations Operation[]
+}
+
+model Warehouse {
+  id        String     @id @default(cuid())
+  name      String
+  code      String     @unique
+  address   String?
+  createdAt DateTime   @default(now())
+  locations Location[]
+}
+
+model Location {
+  id          String      @id @default(cuid())
+  name        String
+  code        String      @unique
+  warehouse   Warehouse   @relation(fields: [warehouseId], references: [id])
+  warehouseId String
+  createdAt   DateTime    @default(now())
+  fromMoves   StockMove[] @relation("FromLocation")
+  toMoves     StockMove[] @relation("ToLocation")
+  fromOps     Operation[] @relation("FromLocation")
+  toOps       Operation[] @relation("ToLocation")
+  stocks      LocationStock[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  products Product[]
+}
+
+model Product {
+  id           String         @id @default(cuid())
+  name         String
+  sku          String         @unique
+  category     Category?      @relation(fields: [categoryId], references: [id])
+  categoryId   String?
+  uom          String         @default("Units")
+  reorderLevel Int            @default(10)
+  costPerUnit  Float          @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  moves        StockMove[]
+  opLines      OperationLine[]
+  stocks       LocationStock[]
+}
+
+model LocationStock {
+  id         String   @id @default(cuid())
+  product    Product  @relation(fields: [productId], references: [id])
+  productId  String
+  location   Location @relation(fields: [locationId], references: [id])
+  locationId String
+  onHand     Float    @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([productId, locationId])
+}
+
+model Operation {
+  id          String          @id @default(cuid())
+  reference   String          @unique
+  type        MoveType
+  status      OperationStatus @default(DRAFT)
+  contact     String?
+  fromLocation  Location?    @relation("FromLocation", fields: [fromLocationId], references: [id])
+  fromLocationId String?
+  toLocation    Location?    @relation("ToLocation", fields: [toLocationId], references: [id])
+  toLocationId  String?
+  scheduledDate DateTime?
+  createdBy   User            @relation(fields: [userId], references: [id])
+  userId      String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  lines       OperationLine[]
+  moves       StockMove[]
+}
+
+model OperationLine {
+  id          String    @id @default(cuid())
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  operationId String
+  product     Product   @relation(fields: [productId], references: [id])
+  productId   String
+  quantity    Float
+  doneQty     Float     @default(0)
+}
+
+model StockMove {
+  id           String    @id @default(cuid())
+  reference    String
+  type         MoveType
+  product      Product   @relation(fields: [productId], references: [id])
+  productId    String
+  quantity     Float
+  fromLocation Location? @relation("FromLocation", fields: [fromLocationId], references: [id])
+  fromLocationId String?
+  toLocation   Location? @relation("ToLocation", fields: [toLocationId], references: [id])
+  toLocationId String?
+  operation    Operation? @relation(fields: [operationId], references: [id])
+  operationId  String?
+  doneBy       User      @relation(fields: [userId], references: [id])
+  userId       String
+  movedAt      DateTime  @default(now())
+}
